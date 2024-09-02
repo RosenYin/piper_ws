@@ -132,7 +132,7 @@ class C_PiperRosNode():
                 exit(0)
             # 发布消息
             self.PublishArmState()
-            self.PubilishArmEndPose()
+            self.PublishArmEndPose()
             self.PublishArmJointAndGripper()
             rate.sleep()
     
@@ -179,12 +179,12 @@ class C_PiperRosNode():
         effort_6:float = self.piper.GetArmGripperMsgs().gripper_state.grippers_effort/1000
         self.joint_states.header.stamp = rospy.Time.now()
         self.joint_states.position = [joint_0,joint_1, joint_2, joint_3, joint_4, joint_5,joint_6]  # Example values
-        self.joint_states.velocity = [vel_0, vel_1, vel_2, vel_3, vel_4, vel_5, 0]  # Example values
+        self.joint_states.velocity = [vel_0, vel_1, vel_2, vel_3, vel_4, vel_5, 0.0]  # Example values
         self.joint_states.effort = [0, 0, 0, 0, 0, 0, effort_6]
         # 发布所有消息
         self.joint_pub.publish(self.joint_states)
     
-    def PubilishArmEndPose(self):
+    def PublishArmEndPose(self):
         # 末端位姿
         endpos = Pose()
         endpos.position.x = self.piper.ArmEndPose.end_pose.X_axis/1000000
