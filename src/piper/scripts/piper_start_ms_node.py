@@ -245,7 +245,7 @@ class C_PiperRosNode():
         """机械臂使能
         
         """
-        rospy.Subscriber('enable_flag', Bool, self.enable_callback)
+        rospy.Subscriber('/enable_flag', Bool, self.enable_callback)
         rospy.spin()
 
     def pos_callback(self, pos_data):
