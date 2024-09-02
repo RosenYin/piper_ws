@@ -130,67 +130,75 @@ class C_PiperRosNode():
             if(elapsed_time_flag):
                 print("程序自动使能超时,退出程序")
                 exit(0)
-            # 机械臂状态
-            arm_status = PiperStatusMsg()
-            arm_status.ctrl_mode = self.piper.GetArmStatus().arm_status.ctrl_mode
-            arm_status.arm_status = self.piper.GetArmStatus().arm_status.arm_status
-            arm_status.mode_feedback = self.piper.GetArmStatus().arm_status.mode_feed
-            arm_status.teach_status = self.piper.GetArmStatus().arm_status.teach_status
-            arm_status.motion_status = self.piper.GetArmStatus().arm_status.motion_status
-            arm_status.trajectory_num = self.piper.GetArmStatus().arm_status.trajectory_num
-            arm_status.err_code = self.piper.GetArmStatus().arm_status.err_code
-            arm_status.joint_1_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_1_angle_limit
-            arm_status.joint_2_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_2_angle_limit
-            arm_status.joint_3_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_3_angle_limit
-            arm_status.joint_4_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_4_angle_limit
-            arm_status.joint_5_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_5_angle_limit
-            arm_status.joint_6_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_6_angle_limit
-            arm_status.communication_status_joint_1 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_1
-            arm_status.communication_status_joint_2 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_2
-            arm_status.communication_status_joint_3 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_3
-            arm_status.communication_status_joint_4 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_4
-            arm_status.communication_status_joint_5 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_5
-            arm_status.communication_status_joint_6 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_6
-            
-            # Here, you can set the joint positions to any value you want
-            # 机械臂关节角和夹爪位置
-            # 由于获取的原始数据是度为单位扩大了1000倍，因此要转为弧度需要先除以1000，再乘3.14/180，然后限制小数点位数为5位
-            joint_0:float = (self.piper.GetArmJointMsgs().joint_state.joint_1/1000) * 0.017444
-            joint_1:float = (self.piper.GetArmJointMsgs().joint_state.joint_2/1000) * 0.017444
-            joint_2:float = (self.piper.GetArmJointMsgs().joint_state.joint_3/1000) * 0.017444
-            joint_3:float = (self.piper.GetArmJointMsgs().joint_state.joint_4/1000) * 0.017444
-            joint_4:float = (self.piper.GetArmJointMsgs().joint_state.joint_5/1000) * 0.017444
-            joint_5:float = (self.piper.GetArmJointMsgs().joint_state.joint_6/1000) * 0.017444
-            joint_6:float = self.piper.GetArmGripperMsgs().gripper_state.grippers_angle/1000000
-            vel_0:float = self.piper.GetArmHighSpdInfoMsgs().motor_1.motor_speed/1000
-            vel_1:float = self.piper.GetArmHighSpdInfoMsgs().motor_2.motor_speed/1000
-            vel_2:float = self.piper.GetArmHighSpdInfoMsgs().motor_3.motor_speed/1000
-            vel_3:float = self.piper.GetArmHighSpdInfoMsgs().motor_4.motor_speed/1000
-            vel_4:float = self.piper.GetArmHighSpdInfoMsgs().motor_5.motor_speed/1000
-            vel_5:float = self.piper.GetArmHighSpdInfoMsgs().motor_6.motor_speed/1000
-            effort_6:float = self.piper.GetArmGripperMsgs().gripper_state.grippers_effort/1000
-            self.joint_states.header.stamp = rospy.Time.now()
-            self.joint_states.position = [joint_0,joint_1, joint_2, joint_3, joint_4, joint_5,joint_6]  # Example values
-            self.joint_states.velocity = [vel_0, vel_1, vel_2, vel_3, vel_4, vel_5, 0]  # Example values
-            self.joint_states.effort = [0, 0, 0, 0, 0, 0, effort_6]
-            # 末端位姿
-            endpos = Pose()
-            endpos.position.x = self.piper.ArmEndPose.end_pose.X_axis/1000000
-            endpos.position.y = self.piper.ArmEndPose.end_pose.Y_axis/1000000
-            endpos.position.z = self.piper.ArmEndPose.end_pose.Z_axis/1000000
-            roll = self.piper.ArmEndPose.end_pose.RX_axis/1000
-            pitch = self.piper.ArmEndPose.end_pose.RY_axis/1000
-            yaw = self.piper.ArmEndPose.end_pose.RZ_axis/1000
-            quaternion = quaternion_from_euler(roll, pitch, yaw)
-            endpos.orientation.x = quaternion[0]
-            endpos.orientation.y = quaternion[1]
-            endpos.orientation.z = quaternion[2]
-            endpos.orientation.w = quaternion[3]
-            # 发布所有消息
-            self.joint_pub.publish(self.joint_states)
-            self.arm_status_pub.publish(arm_status)
-            self.end_pose_pub.publish(endpos)
+            # 发布消息
+            self.PublishArmState()
+            self.PubilishArmEndPose()
+            self.PublishArmJointAndGripper()
             rate.sleep()
+    
+    def PublishArmState(self):
+        # 机械臂状态
+        arm_status = PiperStatusMsg()
+        arm_status.ctrl_mode = self.piper.GetArmStatus().arm_status.ctrl_mode
+        arm_status.arm_status = self.piper.GetArmStatus().arm_status.arm_status
+        arm_status.mode_feedback = self.piper.GetArmStatus().arm_status.mode_feed
+        arm_status.teach_status = self.piper.GetArmStatus().arm_status.teach_status
+        arm_status.motion_status = self.piper.GetArmStatus().arm_status.motion_status
+        arm_status.trajectory_num = self.piper.GetArmStatus().arm_status.trajectory_num
+        arm_status.err_code = self.piper.GetArmStatus().arm_status.err_code
+        arm_status.joint_1_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_1_angle_limit
+        arm_status.joint_2_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_2_angle_limit
+        arm_status.joint_3_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_3_angle_limit
+        arm_status.joint_4_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_4_angle_limit
+        arm_status.joint_5_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_5_angle_limit
+        arm_status.joint_6_angle_limit = self.piper.GetArmStatus().arm_status.err_status.joint_6_angle_limit
+        arm_status.communication_status_joint_1 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_1
+        arm_status.communication_status_joint_2 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_2
+        arm_status.communication_status_joint_3 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_3
+        arm_status.communication_status_joint_4 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_4
+        arm_status.communication_status_joint_5 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_5
+        arm_status.communication_status_joint_6 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_6
+        self.arm_status_pub.publish(arm_status)
+        
+    def PublishArmJointAndGripper(self):
+        # 机械臂关节角和夹爪位置
+        # 由于获取的原始数据是度为单位扩大了1000倍，因此要转为弧度需要先除以1000，再乘3.14/180，然后限制小数点位数为5位
+        joint_0:float = (self.piper.GetArmJointMsgs().joint_state.joint_1/1000) * 0.017444
+        joint_1:float = (self.piper.GetArmJointMsgs().joint_state.joint_2/1000) * 0.017444
+        joint_2:float = (self.piper.GetArmJointMsgs().joint_state.joint_3/1000) * 0.017444
+        joint_3:float = (self.piper.GetArmJointMsgs().joint_state.joint_4/1000) * 0.017444
+        joint_4:float = (self.piper.GetArmJointMsgs().joint_state.joint_5/1000) * 0.017444
+        joint_5:float = (self.piper.GetArmJointMsgs().joint_state.joint_6/1000) * 0.017444
+        joint_6:float = self.piper.GetArmGripperMsgs().gripper_state.grippers_angle/1000000
+        vel_0:float = self.piper.GetArmHighSpdInfoMsgs().motor_1.motor_speed/1000
+        vel_1:float = self.piper.GetArmHighSpdInfoMsgs().motor_2.motor_speed/1000
+        vel_2:float = self.piper.GetArmHighSpdInfoMsgs().motor_3.motor_speed/1000
+        vel_3:float = self.piper.GetArmHighSpdInfoMsgs().motor_4.motor_speed/1000
+        vel_4:float = self.piper.GetArmHighSpdInfoMsgs().motor_5.motor_speed/1000
+        vel_5:float = self.piper.GetArmHighSpdInfoMsgs().motor_6.motor_speed/1000
+        effort_6:float = self.piper.GetArmGripperMsgs().gripper_state.grippers_effort/1000
+        self.joint_states.header.stamp = rospy.Time.now()
+        self.joint_states.position = [joint_0,joint_1, joint_2, joint_3, joint_4, joint_5,joint_6]  # Example values
+        self.joint_states.velocity = [vel_0, vel_1, vel_2, vel_3, vel_4, vel_5, 0]  # Example values
+        self.joint_states.effort = [0, 0, 0, 0, 0, 0, effort_6]
+        # 发布所有消息
+        self.joint_pub.publish(self.joint_states)
+    
+    def PubilishArmEndPose(self):
+        # 末端位姿
+        endpos = Pose()
+        endpos.position.x = self.piper.ArmEndPose.end_pose.X_axis/1000000
+        endpos.position.y = self.piper.ArmEndPose.end_pose.Y_axis/1000000
+        endpos.position.z = self.piper.ArmEndPose.end_pose.Z_axis/1000000
+        roll = self.piper.ArmEndPose.end_pose.RX_axis/1000
+        pitch = self.piper.ArmEndPose.end_pose.RY_axis/1000
+        yaw = self.piper.ArmEndPose.end_pose.RZ_axis/1000
+        quaternion = quaternion_from_euler(roll, pitch, yaw)
+        endpos.orientation.x = quaternion[0]
+        endpos.orientation.y = quaternion[1]
+        endpos.orientation.z = quaternion[2]
+        endpos.orientation.w = quaternion[3]
+        self.end_pose_pub.publish(endpos)
     
     def SubPosThread(self):
         """机械臂末端位姿订阅
@@ -275,12 +283,12 @@ class C_PiperRosNode():
         if(joint_6>80000): joint_6 = 80000
         if(joint_6<0): joint_6 = 0
         if(self.GetEnableFlag()):
-            self.piper.MotionCtrl_2(0x01, 0x01, 100)
+            self.piper.MotionCtrl_2(0x01, 0x01, 50)
             self.piper.JointCtrl(joint_0, joint_1, joint_2, 
                                     joint_3, joint_4, joint_5)
             if(self.girpper_exist):
                 self.piper.GripperCtrl(abs(joint_6), 1000, 0x01, 0)
-            self.piper.MotionCtrl_2(0x01, 0x01, 100)
+            self.piper.MotionCtrl_2(0x01, 0x01, 50)
             pass
     
     def enable_callback(self, enable_flag:Bool):
