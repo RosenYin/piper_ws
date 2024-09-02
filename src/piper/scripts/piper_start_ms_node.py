@@ -17,6 +17,8 @@ import argparse
 from piper_sdk import *
 from piper_sdk import C_PiperInterface
 from piper_msgs.msg import PiperStatusMsg, PosCmd
+from geometry_msgs.msg import Pose
+from tf.transformations import quaternion_from_euler  # 用于欧拉角到四元数的转换
 
 def check_ros_master():
     try:
@@ -55,37 +57,40 @@ class C_PiperRosNode():
             if(rospy.get_param("~auto_enable") and self.mode == 0):
                 self.auto_enable = True
         rospy.loginfo("%s is %s", rospy.resolve_name('~auto_enable'), self.auto_enable)
-
+        # publish
         self.joint_std_pub_puppet = rospy.Publisher('/puppet/joint_states', JointState, queue_size=1)
         if(self.mode != 0):
             self.joint_std_pub_master = rospy.Publisher('/master/joint_states', JointState, queue_size=1)
-        self.arm_status_pub = rospy.Publisher('arm_status', PiperStatusMsg, queue_size=1)
+        self.arm_status_pub = rospy.Publisher('/puppet/arm_status', PiperStatusMsg, queue_size=1)
+        self.end_pose_pub = rospy.Publisher('/puppet/end_pose', Pose, queue_size=1)
+        
         self.__enable_flag = False
+        # 从臂消息
         self.joint_state_slave = JointState()
         self.joint_state_slave.name = ['joint0', 'joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6']
-        self.joint_state_slave.position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0]
-        self.joint_state_slave.velocity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0]
-        self.joint_state_slave.effort = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0]
-
+        self.joint_state_slave.position = [0.0] * 7
+        self.joint_state_slave.velocity = [0.0] * 7
+        self.joint_state_slave.effort = [0.0] * 7
+        # 主臂消息
         self.joint_state_master = JointState()
         self.joint_state_master.name = ['joint0', 'joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6']
-        self.joint_state_master.position = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0]
-        self.joint_state_master.velocity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0]
-        self.joint_state_master.effort = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0,0]
+        self.joint_state_master.position = [0.0] * 7
+        self.joint_state_master.velocity = [0.0] * 7
+        self.joint_state_master.effort = [0.0] * 7
 
         self.piper = C_PiperInterface(can_name=self.can_port)
         self.piper.ConnectPort()
 
         if(self.mode == 0):
             sub_pos_th = threading.Thread(target=self.SubPosThread)
-            sub_pos_th.daemon = True
-            sub_pos_th.start()
             sub_joint_th = threading.Thread(target=self.SubJointThread)
             sub_enable_th = threading.Thread(target=self.SubEnableThread)
             
+            sub_pos_th.daemon = True
             sub_joint_th.daemon = True
             sub_enable_th.daemon = True
             
+            sub_pos_th.start()
             sub_joint_th.start()
             sub_enable_th.start()
 
@@ -159,40 +164,55 @@ class C_PiperRosNode():
             arm_status.communication_status_joint_4 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_4
             arm_status.communication_status_joint_5 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_5
             arm_status.communication_status_joint_6 = self.piper.GetArmStatus().arm_status.err_status.communication_status_joint_6
-            self.joint_state_slave.header.stamp = rospy.Time.now()
-            self.joint_state_master.header.stamp = rospy.Time.now()
             # Here, you can set the joint positions to any value you want
-            joint_0:int = round(self.piper.GetArmJointGripperMsgs().joint_state.joint_1/1000, 3) * 0.017444
-            joint_1:int = round(self.piper.GetArmJointGripperMsgs().joint_state.joint_2/1000, 3) * 0.017444
-            joint_2:int = round(self.piper.GetArmJointGripperMsgs().joint_state.joint_3/1000, 3) * 0.017444
-            joint_3:int = round(self.piper.GetArmJointGripperMsgs().joint_state.joint_4/1000, 3) * 0.017444
-            joint_4:int = round(self.piper.GetArmJointGripperMsgs().joint_state.joint_5/1000, 3) * 0.017444
-            joint_5:int = round(self.piper.GetArmJointGripperMsgs().joint_state.joint_6/1000, 3) * 0.017444
-            joint_6 = round(self.piper.GetArmJointGripperMsgs().gripper_state.grippers_angle/1000000, 3)
-            vel_0:int = (self.piper.GetArmHighSpdInfoMsgs().motor_1.motor_speed)
-            vel_1:int = (self.piper.GetArmHighSpdInfoMsgs().motor_2.motor_speed)
-            vel_2:int = (self.piper.GetArmHighSpdInfoMsgs().motor_3.motor_speed)
-            vel_3:int = (self.piper.GetArmHighSpdInfoMsgs().motor_4.motor_speed)
-            vel_4:int = (self.piper.GetArmHighSpdInfoMsgs().motor_5.motor_speed)
-            vel_5:int = (self.piper.GetArmHighSpdInfoMsgs().motor_6.motor_speed)
-            vel_6:int = round(self.piper.GetArmJointGripperMsgs().gripper_state.grippers_effort/1000, 3)
+            # 从臂反馈消息
+            self.joint_state_slave.header.stamp = rospy.Time.now()
+            joint_0:float = (self.piper.GetArmJointMsgs().joint_state.joint_1/1000) * 0.017444
+            joint_1:float = (self.piper.GetArmJointMsgs().joint_state.joint_2/1000) * 0.017444
+            joint_2:float = (self.piper.GetArmJointMsgs().joint_state.joint_3/1000) * 0.017444
+            joint_3:float = (self.piper.GetArmJointMsgs().joint_state.joint_4/1000) * 0.017444
+            joint_4:float = (self.piper.GetArmJointMsgs().joint_state.joint_5/1000) * 0.017444
+            joint_5:float = (self.piper.GetArmJointMsgs().joint_state.joint_6/1000) * 0.017444
+            joint_6:float = self.piper.GetArmGripperMsgs().gripper_state.grippers_angle/1000000
+            vel_0:float = self.piper.GetArmHighSpdInfoMsgs().motor_1.motor_speed/1000
+            vel_1:float = self.piper.GetArmHighSpdInfoMsgs().motor_2.motor_speed/1000
+            vel_2:float = self.piper.GetArmHighSpdInfoMsgs().motor_3.motor_speed/1000
+            vel_3:float = self.piper.GetArmHighSpdInfoMsgs().motor_4.motor_speed/1000
+            vel_4:float = self.piper.GetArmHighSpdInfoMsgs().motor_5.motor_speed/1000
+            vel_5:float = self.piper.GetArmHighSpdInfoMsgs().motor_6.motor_speed/1000
+            effort_6:float = self.piper.GetArmGripperMsgs().gripper_state.grippers_effort/1000
             self.joint_state_slave.position = [joint_0,joint_1, joint_2, joint_3, joint_4, joint_5,joint_6]  # Example values
-            self.joint_state_slave.velocity = [vel_0, vel_1, vel_2, vel_3, vel_4, vel_5, vel_6]  # Example values
-
-            self.joint_std_pub_puppet.publish(self.joint_state_slave)
-
-            joint_0 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_1/1000, 3) * 0.017444
-            joint_1 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_2/1000, 3) * 0.017444
-            joint_2 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_3/1000, 3) * 0.017444
-            joint_3 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_4/1000, 3) * 0.017444
-            joint_4 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_5/1000, 3) * 0.017444
-            joint_5 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_6/1000, 3) * 0.017444
-            joint_6 = round(self.piper.GetArmJointGripperCtrlMsgs().gripper_ctrl.grippers_angle/1000000, 3)
+            self.joint_state_slave.velocity = [vel_0, vel_1, vel_2, vel_3, vel_4, vel_5, 0.0]  # Example values
+            self.joint_state_slave.effort[6] = effort_6
+            # 主臂控制消息
+            self.joint_state_master.header.stamp = rospy.Time.now()
+            joint_0:float = (self.piper.GetArmJointCtrl().joint_ctrl.joint_1/1000) * 0.017444
+            joint_1:float = (self.piper.GetArmJointCtrl().joint_ctrl.joint_2/1000) * 0.017444
+            joint_2:float = (self.piper.GetArmJointCtrl().joint_ctrl.joint_3/1000) * 0.017444
+            joint_3:float = (self.piper.GetArmJointCtrl().joint_ctrl.joint_4/1000) * 0.017444
+            joint_4:float = (self.piper.GetArmJointCtrl().joint_ctrl.joint_5/1000) * 0.017444
+            joint_5:float = (self.piper.GetArmJointCtrl().joint_ctrl.joint_6/1000) * 0.017444
+            joint_6:float = self.piper.GetArmGripperCtrl().gripper_ctrl.grippers_angle/1000000
             self.joint_state_master.position = [joint_0,joint_1, joint_2, joint_3, joint_4, joint_5,joint_6]  # Example values
+            # 末端位姿
+            endpos = Pose()
+            endpos.position.x = self.piper.ArmEndPose.end_pose.X_axis/1000000
+            endpos.position.y = self.piper.ArmEndPose.end_pose.Y_axis/1000000
+            endpos.position.z = self.piper.ArmEndPose.end_pose.Z_axis/1000000
+            roll = self.piper.ArmEndPose.end_pose.RX_axis/1000
+            pitch = self.piper.ArmEndPose.end_pose.RY_axis/1000
+            yaw = self.piper.ArmEndPose.end_pose.RZ_axis/1000
+            quaternion = quaternion_from_euler(roll, pitch, yaw)
+            endpos.orientation.x = quaternion[0]
+            endpos.orientation.y = quaternion[1]
+            endpos.orientation.z = quaternion[2]
+            endpos.orientation.w = quaternion[3]
             
             if(self.mode != 0):
                 self.joint_std_pub_master.publish(self.joint_state_master)
+            self.joint_std_pub_puppet.publish(self.joint_state_slave)
             self.arm_status_pub.publish(arm_status)
+            self.end_pose_pub.publish(endpos)
             rate.sleep()
     
     def SubPosThread(self):

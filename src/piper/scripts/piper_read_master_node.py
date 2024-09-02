@@ -52,13 +52,13 @@ class C_PiperRosNode():
         while not rospy.is_shutdown():
             self.joint_state_master.header.stamp = rospy.Time.now()
             # Here, you can set the joint positions to any value you want
-            joint_0 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_1/1000, 3) * 0.017444
-            joint_1 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_2/1000, 3) * 0.017444
-            joint_2 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_3/1000, 3) * 0.017444
-            joint_3 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_4/1000, 3) * 0.017444
-            joint_4 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_5/1000, 3) * 0.017444
-            joint_5 = round(self.piper.GetArmJointGripperCtrlMsgs().joint_ctrl.joint_6/1000, 3) * 0.017444
-            joint_6 = round(self.piper.GetArmJointGripperCtrlMsgs().gripper_ctrl.grippers_angle/1000000, 3)
+            joint_0 = self.piper.GetArmJointCtrl().joint_ctrl.joint_1/1000 * 0.017444
+            joint_1 = self.piper.GetArmJointCtrl().joint_ctrl.joint_2/1000 * 0.017444
+            joint_2 = self.piper.GetArmJointCtrl().joint_ctrl.joint_3/1000 * 0.017444
+            joint_3 = self.piper.GetArmJointCtrl().joint_ctrl.joint_4/1000 * 0.017444
+            joint_4 = self.piper.GetArmJointCtrl().joint_ctrl.joint_5/1000 * 0.017444
+            joint_5 = self.piper.GetArmJointCtrl().joint_ctrl.joint_6/1000 * 0.017444
+            joint_6 = self.piper.GetArmGripperCtrl().gripper_ctrl.grippers_angle/1000000
             self.joint_state_master.position = [joint_0,joint_1, joint_2, joint_3, joint_4, joint_5,joint_6]  # Example values
 
             self.joint_std_pub_master.publish(self.joint_state_master)
